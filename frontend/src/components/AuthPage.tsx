@@ -35,10 +35,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             return;
         }
 
-        const endpoint = isLogin ? 'http://localhost:5000/api/login' : 'http://localhost:5000/api/signup';
+        const endpoint = isLogin ? 'http://localhost:5000/api/users/login' : 'http://localhost:5000/api/users/signup';
         const payload = isLogin
             ? { username: trimmedUsername, password: trimmedPassword }
-            : { username: trimmedUsername, password: trimmedPassword, email: email.trim(), role };
+            : { username: trimmedUsername, password: trimmedPassword, role };
 
         try {
             const response = await fetch(endpoint, {
