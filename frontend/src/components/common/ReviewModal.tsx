@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Book } from '../types';
+import { Book } from '../../types';
 
 interface ReviewModalProps {
     book: Book;

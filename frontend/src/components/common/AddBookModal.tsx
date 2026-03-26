@@ -1,20 +1,21 @@
 
 import React, { useState, useRef } from 'react';
-import { Book, BookStatus, UserRole } from '../types';
-import { extractBookInfo } from '../services/geminiService';
-import { parseCSV } from '../utils/csvParser';
+import { Book, BookStatus, UserRole } from '../../types';
+import { extractBookInfo } from '../../services/geminiService';
+import { parseCSV } from '../../utils/csvParser';
 
 // Manual entry state
 interface AddBookModalProps {
   onClose: () => void;
-  onSave: (book: Book) => void;
-  onBulkSave: (books: Book[]) => void;
+  onSave: (book: Book) => void | Promise<void>;
+  onBulkSave: (books: Book[]) => void | Promise<void>;
   initialData?: Partial<Book>;
   books: Book[];
   currentRole: UserRole;
+  addToast?: (msg: string, type: any) => void;
 }
 
-const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave, initialData, books, currentRole }) => {
+const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave, initialData, books, currentRole, addToast }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,12 +25,13 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
   // Manual entry state
   const [manualTitle, setManualTitle] = useState(initialData?.title || '');
   const [manualAuthor, setManualAuthor] = useState(initialData?.author || '');
+  const [manualNotes, setManualNotes] = useState(initialData?.notes || '');
   const [manualDueDate, setManualDueDate] = useState('');
   const [manualCategory, setManualCategory] = useState(initialData?.category || '');
   const [manualLanguage, setManualLanguage] = useState(initialData?.language || 'English');
-  const [manualBorrower, setManualBorrower] = useState('');
-  const [manualEmail, setManualEmail] = useState('');
-  const [manualCoverUrl, setManualCoverUrl] = useState<string | null>(null);
+  const [manualBorrower, setManualBorrower] = useState(initialData?.borrower || '');
+  const [manualEmail, setManualEmail] = useState(initialData?.borrowerEmail || '');
+  const [manualCoverUrl, setManualCoverUrl] = useState<string | null>(initialData?.coverUrl || null);
   const [manualLink, setManualLink] = useState(initialData?.externalLink || '');
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,6 +46,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
       setManualTitle(bookData.title || '');
       setManualAuthor(bookData.author || '');
       setManualCategory(bookData.category || '');
+      if (bookData.notes) setManualNotes(bookData.notes);
       setMode('manual');
     } catch (e: any) {
       setError(e.message || "Something went wrong.");
@@ -53,27 +56,49 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
   };
 
   const handleManualSubmit = () => {
+    // Basic validation
+    if (!manualTitle.trim()) {
+      setError("Book Title is required.");
+      return;
+    }
+    if (!manualAuthor.trim()) {
+      setError("Author name is required.");
+      return;
+    }
+
     const hasBorrower = manualBorrower.trim().length > 0;
 
-    if (hasBorrower && !manualDueDate) {
-      setError("Due Date is required when assigning a borrower.");
+    if (hasBorrower) {
+      if (!manualDueDate) {
+        setError("Due Date is required when assigning a borrower.");
+        return;
+      }
+      if (manualEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(manualEmail)) {
+        setError("Please enter a valid email address.");
+        return;
+      }
+    }
+
+    if (manualLink && !manualLink.startsWith('http')) {
+      setError("External resource link must be a valid URL starting with http:// or https://");
       return;
     }
 
     const newBook: Book = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: manualTitle,
-      author: manualAuthor,
-      category: manualCategory || 'General',
-      language: manualLanguage || 'English',
+      id: initialData?.id || Math.random().toString(36).substr(2, 9),
+      title: manualTitle.trim(),
+      author: manualAuthor.trim(),
+      category: manualCategory.trim() || 'General',
+      language: manualLanguage.trim() || 'English',
+      notes: manualNotes.trim(),
       borrowDate: hasBorrower ? new Date().toISOString().split('T')[0] : '',
       dueDate: manualDueDate || '',
       status: hasBorrower ? BookStatus.BORROWED : BookStatus.AVAILABLE,
-      renewalCount: 0,
+      renewalCount: initialData?.renewalCount || 0,
       coverUrl: manualCoverUrl || `https://picsum.photos/seed/${encodeURIComponent(manualTitle)}/300/450`,
-      borrower: hasBorrower ? manualBorrower : undefined,
-      borrowerEmail: hasBorrower ? manualEmail : undefined,
-      externalLink: manualLink || undefined
+      borrower: hasBorrower ? manualBorrower.trim() : undefined,
+      borrowerEmail: hasBorrower ? manualEmail.trim() : undefined,
+      externalLink: manualLink.trim() || undefined
     };
 
     onSave(newBook);
@@ -82,8 +107,13 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError("Image size too large. Please use an image under 2MB.");
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size too large. Please use an image under 5MB.");
+        return;
+      }
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setError("Invalid file type. Please use JPG, PNG or WEBP.");
         return;
       }
       const reader = new FileReader();
@@ -116,6 +146,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
       setLoading(true);
       try {
         const bookData = await extractBookInfo("Extract book info from cover", dataUrl);
+        addToast?.("Book identified successfully!", "success");
         // Stop stream
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -136,8 +167,27 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
     <div className="fixed inset-0 bg-slate-900 bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-800">Add New Book</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+          <h2 className="text-xl font-bold text-slate-800">{initialData?.id ? 'Edit Book' : 'Add New Book'}</h2>
+          <div className="flex items-center gap-3">
+            {mode === 'manual' && manualTitle && manualAuthor && (
+              <button 
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const data = await extractBookInfo(`Write a one sentence summary of the book ${manualTitle} by ${manualAuthor}`);
+                    if (data.notes) setManualNotes(data.notes);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center gap-1 disabled:opacity-50"
+              >
+                ✨ Auto-Summarize
+              </button>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
@@ -218,7 +268,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
 
                   <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-slate-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    PNG, JPG up to 2MB
+                    JPG, PNG, WEBP up to 5MB
                   </div>
                 </div>
               </div>
@@ -251,6 +301,15 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
                   onChange={(e) => setManualCategory(e.target.value)}
                   className="w-full rounded-xl border-slate-200 bg-slate-50 focus:border-indigo-500 focus:ring-indigo-500 p-3 text-sm"
                   placeholder="e.g. Fantasy"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Book Summary / Notes</label>
+                <textarea
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                  className="w-full rounded-xl border-slate-200 bg-slate-50 focus:border-indigo-500 focus:ring-indigo-500 p-3 text-sm h-20"
+                  placeholder="e.g. A thrilling adventure..."
                 />
               </div>
               <div>
@@ -415,10 +474,11 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
           {mode === 'manual' && (
             <button
               onClick={handleManualSubmit}
-              disabled={!manualTitle || !manualAuthor}
-              className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 transition-all"
+              disabled={!manualTitle || !manualAuthor || loading}
+              className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
             >
-              {manualBorrower.trim() ? 'Add Borrowing' : 'Add to Inventory'}
+              {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+              {initialData?.id ? 'Update Book' : (manualBorrower.trim() ? 'Add Borrowing' : 'Add to Inventory')}
             </button>
           )}
 

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Book, BookStatus, UserRole } from '../types';
-import { calculateStructuredFee, formatCurrency } from '../utils/feeConfig';
+import { Book, BookStatus, UserRole } from '../../types';
+import { QRCodeSVG } from 'qrcode.react';
+import { calculateStructuredFee, formatCurrency } from '../../utils/feeConfig';
 
 interface BookDetailsModalProps {
     book: Book;
@@ -111,6 +112,15 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRe
                         </div>
                         <h2 className="text-3xl font-bold text-slate-900 leading-tight mb-2">{book.title}</h2>
                         <p className="text-lg text-slate-500 font-medium mb-4">{book.author}</p>
+                        
+                        {book.notes && (
+                            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 mb-6 relative">
+                                <span className="absolute -top-3 left-4 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">AI Summary</span>
+                                <p className="text-sm text-slate-600 leading-relaxed italic mt-1 text-justify">
+                                    "{book.notes}"
+                                </p>
+                            </div>
+                        )}
 
                         {book.externalLink && (
                             currentRole !== UserRole.STUDENT ||
@@ -140,6 +150,16 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRe
                                             'bg-blue-500'
                                     }`}></div>
                                 <p className="text-sm font-bold text-slate-700 uppercase">{book.status.replace('_', ' ')}</p>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Book Identity</p>
+                                <p className="text-sm font-bold text-slate-700 truncate max-w-[120px]" title={book.id}>#{book.id.substring(0, 8)}</p>
+                            </div>
+                            <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                                <QRCodeSVG value={book.id} size={48} level="H" />
                             </div>
                         </div>
                     </div>

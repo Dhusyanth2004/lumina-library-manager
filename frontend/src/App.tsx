@@ -1,19 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import BookList from './components/BookList';
-import AddBookModal from './components/AddBookModal';
-import UserProfileModal from './components/UserProfileModal';
-import ReviewModal from './components/ReviewModal';
+import Sidebar from './components/layout/Sidebar';
+import Dashboard from './pages/Dashboard';
+import BookList from './components/features/BookList';
+import AddBookModal from './components/common/AddBookModal';
+import UserProfileModal from './components/common/UserProfileModal';
+import ReviewModal from './components/common/ReviewModal';
 import { Book, BookStatus, UserRole, LibraryStats } from './types';
-import SearchFilters from './components/SearchFilters';
-import EditDueDateModal from './components/EditDueDateModal';
-import BookDetailsModal from './components/BookDetailsModal';
-import AuthPage from './components/AuthPage';
+import SearchFilters from './components/features/SearchFilters';
+import EditDueDateModal from './components/common/EditDueDateModal';
+import BookDetailsModal from './components/common/BookDetailsModal';
+import AuthPage from './pages/AuthPage';
 import { checkAndSendAlerts } from './services/notificationService';
 import { calculateStructuredFee } from './utils/feeConfig';
-import FeeCalculator from './components/FeeCalculator';
-import ApproveReservationModal from './components/ApproveReservationModal';
+import FeeCalculator from './components/common/FeeCalculator';
+import ApproveReservationModal from './components/common/ApproveReservationModal';
+import ExportDataModal from './components/common/ExportDataModal';
+import Chatbot from './components/common/Chatbot';
+import api from './services/api';
+import ConfirmationModal from './components/common/ConfirmationModal';
+import { BookCardSkeleton } from './components/common/Skeleton';
+import ToastContainer, { ToastMessage, ToastType } from './components/common/Toast';
 
 const INITIAL_BOOKS: Book[] = [
   {
@@ -129,18 +135,53 @@ const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(() => (localStorage.getItem('lumina_role') as UserRole) || UserRole.ADMIN);
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('lumina_auth') === 'true');
   const [username, setUsername] = useState(() => localStorage.getItem('lumina_user') || '');
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('lumina_theme') === 'dark');
   const [isFeeCalculatorOpen, setIsFeeCalculatorOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [selectedBookForApproval, setSelectedBookForApproval] = useState<Book | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [totalBooks, setTotalBooks] = useState(0);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; bookId: string; bookTitle: string }>({
+    isOpen: false,
+    bookId: '',
+    bookTitle: '',
+  });
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (message: string, type: ToastType = 'success') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   const API_URL = '/api';
 
   const fetchBooks = async () => {
+    setIsSyncing(true);
+    setFetchError(null);
     try {
-      const response = await fetch(`${API_URL}/books`);
-      const data = await response.json();
-      setBooks(data);
-    } catch (error) {
+      const response = await api.get('/books', { params: { limit: 1000 } });
+      const data = response.data;
+      if (data && Array.isArray(data.books)) {
+        setBooks(data.books);
+        setTotalBooks(data.total);
+      } else if (Array.isArray(data)) {
+        setBooks(data);
+        setTotalBooks(data.length);
+      }
+    } catch (error: any) {
       console.error('Failed to fetch books:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        handleLogout();
+      } else {
+        setFetchError('Could not connect to the backend database. Check if the server is running.');
+      }
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -148,9 +189,7 @@ const App: React.FC = () => {
     if (isAuthenticated && books.length > 0) {
       const { updatedBooks, alertsSent } = checkAndSendAlerts(books);
       if (alertsSent > 0) {
-        // We only update if status changed or alert sent
-        // Actually checkAndSendAlerts only returns books that were updated with lastAlertSent or OVERDUE status
-        // We should only update the server for those specific books
+
         updatedBooks.forEach(updatedBook => {
           const originalBook = books.find(b => b.id === updatedBook.id);
           if (originalBook && (originalBook.status !== updatedBook.status || originalBook.lastAlertSent !== updatedBook.lastAlertSent)) {
@@ -215,48 +254,66 @@ const App: React.FC = () => {
   };
 
   const updateBookOnServer = async (id: string, updates: Partial<Book>) => {
+    setIsSyncing(true);
     try {
-      const resp = await fetch(`${API_URL}/books/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      if (resp.ok) fetchBooks();
+      await api.put(`/books/${id}`, updates);
+      await fetchBooks();
+      addToast('Library updated successfully!');
     } catch (error) {
       console.error('Update failed:', error);
+      addToast('Failed to update library data.', 'error');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
   const handleAddBook = async (newBook: Book) => {
+    if (books.find(b => b.id === newBook.id)) {
+      await updateBookOnServer(newBook.id, newBook);
+      setIsModalOpen(false);
+      setSelectedBookForModal(null);
+      return;
+    }
+
     const bookWithStatus = {
       ...newBook,
       status: newBook.borrower ? BookStatus.BORROWED : BookStatus.AVAILABLE
     };
     try {
-      await fetch(`${API_URL}/books`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bookWithStatus)
-      });
+      await api.post('/books', bookWithStatus);
       fetchBooks();
       setIsModalOpen(false);
       setSelectedBookForModal(null);
+      addToast(`${newBook.title} added to library!`);
     } catch (error) {
       console.error('Add failed:', error);
+      addToast('Failed to add book. Please check your data.', 'error');
     }
   };
 
   const handleBulkAdd = async (newBooks: Book[]) => {
-    for (const book of newBooks) {
-      await fetch(`${API_URL}/books`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(book)
-      });
+    try {
+      for (const book of newBooks) {
+        await api.post('/books', book);
+      }
+      fetchBooks();
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Bulk add failed:', error);
     }
-    fetchBooks();
-    setIsModalOpen(false);
   };
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('lumina_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('lumina_theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   const handleRenew = (id: string) => {
     const book = books.find(b => b.id === id);
@@ -273,11 +330,11 @@ const App: React.FC = () => {
   const handleReturn = (id: string) => {
     updateBookOnServer(id, {
       status: BookStatus.AVAILABLE,
-      borrower: undefined,
-      borrowerEmail: undefined,
+      borrower: null as any,
+      borrowerEmail: null as any,
       dueDate: '',
       borrowDate: '',
-      lastAlertSent: undefined
+      lastAlertSent: null as any
     });
   };
 
@@ -313,13 +370,13 @@ const App: React.FC = () => {
       borrower: book?.reservedBy,
       borrowerEmail,
       borrowDate: new Date().toISOString().split('T')[0],
-      reservedBy: undefined
+      reservedBy: null as any
     });
     setSelectedBookForApproval(null);
   };
 
   const handleRejectReservation = (id: string) => {
-    updateBookOnServer(id, { status: BookStatus.AVAILABLE, reservedBy: undefined });
+    updateBookOnServer(id, { status: BookStatus.AVAILABLE, reservedBy: null as any });
   };
 
   const handleUpdateDueDate = (id: string, newDate: string) => {
@@ -331,15 +388,27 @@ const App: React.FC = () => {
     setSelectedBookForDueDate(null);
   };
 
-  const handleDeleteBook = async (id: string) => {
-    const bookToDelete = books.find(b => b.id === id);
-    if (window.confirm(`Are you sure you want to permanently remove "${bookToDelete?.title}"?`)) {
-      try {
-        await fetch(`${API_URL}/books/${id}`, { method: 'DELETE' });
-        fetchBooks();
-      } catch (error) {
-        console.error('Delete failed:', error);
-      }
+  const handleDeleteBook = (id: string) => {
+    const book = books.find(b => b.id === id);
+    if (book) {
+      setDeleteConfirmation({
+        isOpen: true,
+        bookId: id,
+        bookTitle: book.title,
+      });
+    }
+  };
+
+  const confirmDeleteBook = async () => {
+    const { bookId } = deleteConfirmation;
+    try {
+      await api.delete(`/books/${bookId}`);
+      await fetchBooks();
+      setDeleteConfirmation({ isOpen: false, bookId: '', bookTitle: '' });
+      addToast('Book removed from library.');
+    } catch (error) {
+      console.error('Delete failed:', error);
+      addToast('Failed to remove book.', 'error');
     }
   };
 
@@ -348,6 +417,11 @@ const App: React.FC = () => {
       updateBookOnServer(selectedBookForReview.id, { review, rating });
     }
     setSelectedBookForReview(null);
+  };
+
+  const handleEditBook = (book: Book) => {
+    setSelectedBookForModal(book);
+    setIsModalOpen(true);
   };
 
   const handleLogin = (role: UserRole, user: string) => {
@@ -362,15 +436,16 @@ const App: React.FC = () => {
     localStorage.removeItem('lumina_auth');
     localStorage.removeItem('lumina_user');
     localStorage.removeItem('lumina_role');
+    localStorage.removeItem('lumina_token');
   };
 
   const filteredBooks = useMemo(() => {
     return books.filter(b => {
       // Search Filter
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = b.title.toLowerCase().includes(searchLower) ||
-        b.author.toLowerCase().includes(searchLower) ||
-        b.category.toLowerCase().includes(searchLower);
+      const matchesSearch = (b.title || '').toLowerCase().includes(searchLower) ||
+        (b.author || '').toLowerCase().includes(searchLower) ||
+        (b.category || '').toLowerCase().includes(searchLower);
 
       if (!matchesSearch) return false;
 
@@ -403,8 +478,8 @@ const App: React.FC = () => {
     )).sort();
   }, [books]);
 
-  const allCategories = useMemo(() => Array.from(new Set(books.map(b => b.category))).sort(), [books]);
-  const allLanguages = useMemo(() => Array.from(new Set(books.map(b => b.language))).sort(), [books]);
+  const allCategories = useMemo(() => Array.from(new Set(books.map(b => b.category || '').filter(Boolean))).sort(), [books]);
+  const allLanguages = useMemo(() => Array.from(new Set(books.map(b => b.language || '').filter(Boolean))).sort(), [books]);
 
   const handleUpdateBookCover = (id: string, coverUrl: string) => {
     updateBookOnServer(id, { coverUrl });
@@ -415,7 +490,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 selection:bg-indigo-100 selection:text-indigo-700">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 selection:bg-indigo-100 selection:text-indigo-700">
       <Sidebar
         activeFilter={filter as any}
         onFilterChange={setFilter as any}
@@ -429,12 +504,30 @@ const App: React.FC = () => {
         onLogout={handleLogout}
         username={username}
         onFeeCalculatorClick={() => setIsFeeCalculatorOpen(true)}
+        onExportClick={() => setIsExportOpen(true)}
+        isDarkMode={isDarkMode}
+        toggleTheme={toggleTheme}
       />
 
-      <main className="flex-1 p-4 md:p-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-serif text-slate-900">Library Insights</h1>
-          <p className="text-slate-500">Welcome back! Here's the current status of your borrowings.</p>
+      <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
+        <header className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-serif text-slate-900 dark:text-white transition-colors">Library Insights</h1>
+            <p className="text-slate-500 dark:text-slate-400">Welcome back! Here's the current status of your borrowings.</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            {isSyncing && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+                Syncing with Database...
+              </div>
+            )}
+            {fetchError && (
+              <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-rose-100 italic">
+                ⚠️ Offline Mode (Backend Down)
+              </div>
+            )}
+          </div>
         </header>
 
         <SearchFilters
@@ -452,7 +545,7 @@ const App: React.FC = () => {
 
         <div className="mt-12">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-slate-800">Your Books</h2>
+            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Your Books</h2>
             {currentRole !== UserRole.STUDENT && (
               <button
                 onClick={() => setIsModalOpen(true)}
@@ -463,22 +556,29 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <BookList
-            books={filteredBooks}
-            onRenew={handleRenew}
-            onReturn={handleReturn}
-            onDelete={handleDeleteBook}
-            onReview={(id) => setSelectedBookForReview(books.find(b => b.id === id) || null)}
-            onReserve={handleReserve}
-            onBorrowRequest={handleBorrowRequest}
-            onApproveReservation={handleApproveReservation}
-            onRejectReservation={handleRejectReservation}
-            onEditDueDate={setSelectedBookForDueDate}
-            onBookClick={setSelectedBookForDetails}
-            onIssueBook={handleIssueBook}
-            currentRole={currentRole}
-            currentUsername={username}
-          />
+          {isSyncing && books.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map(i => <BookCardSkeleton key={i} />)}
+            </div>
+          ) : (
+            <BookList
+              books={filteredBooks}
+              onRenew={handleRenew}
+              onReturn={handleReturn}
+              onDelete={handleDeleteBook}
+              onEdit={handleEditBook}
+              onReview={(id) => setSelectedBookForReview(books.find(b => b.id === id) || null)}
+              onReserve={handleReserve}
+              onBorrowRequest={handleBorrowRequest}
+              onApproveReservation={handleApproveReservation}
+              onRejectReservation={handleRejectReservation}
+              onEditDueDate={setSelectedBookForDueDate}
+              onBookClick={setSelectedBookForDetails}
+              onIssueBook={handleIssueBook}
+              currentRole={currentRole}
+              currentUsername={username}
+            />
+          )}
         </div>
       </main>
 
@@ -490,6 +590,7 @@ const App: React.FC = () => {
           initialData={selectedBookForModal || undefined}
           books={books}
           currentRole={currentRole}
+          addToast={addToast}
         />
       )}
 
@@ -547,6 +648,27 @@ const App: React.FC = () => {
           onConfirm={handleFinalizeApproval}
         />
       )}
+
+      {isExportOpen && (
+        <ExportDataModal
+          books={books}
+          onClose={() => setIsExportOpen(false)}
+        />
+      )}
+
+      <Chatbot books={books} />
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        title="Delete Book"
+        message={`Are you sure you want to permanently remove "${deleteConfirmation.bookTitle}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteBook}
+        onCancel={() => setDeleteConfirmation({ isOpen: false, bookId: '', bookTitle: '' })}
+        type="danger"
+      />
     </div>
   );
 };

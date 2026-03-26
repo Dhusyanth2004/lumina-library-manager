@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Book, LibraryStats, UserRole } from '../types';
+import { Book, LibraryStats, UserRole } from '../../types';
 
 interface SidebarProps {
   activeFilter: 'all' | 'available' | 'borrowed' | 'overdue' | 'reserved' | 'returned';
@@ -14,10 +14,13 @@ interface SidebarProps {
   onRoleChange: (role: UserRole) => void;
   username: string;
   onFeeCalculatorClick: () => void;
+  onExportClick?: () => void;
+  isDarkMode: boolean;
+  toggleTheme: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-  activeFilter, onFilterChange, onAddClick, onBookClick, onUserClick, onLogout, books, stats, currentRole, onRoleChange, username, onFeeCalculatorClick
+  activeFilter, onFilterChange, onAddClick, onBookClick, onUserClick, onLogout, books, stats, currentRole, onRoleChange, username, onFeeCalculatorClick, onExportClick, isDarkMode, toggleTheme
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isAdminExpanded, setIsAdminExpanded] = useState(false);
@@ -29,11 +32,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   )).sort();
 
   return (
-    <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-6 flex flex-col gap-8 sticky top-0 h-auto md:h-screen">
+    <aside className="w-full md:w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-8 sticky top-0 h-auto md:h-screen transition-colors duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-indigo-600 font-bold text-2xl">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">L</div>
-          <span className="font-serif tracking-tight">Lumina</span>
+          <span className="font-serif tracking-tight dark:text-white">Lumina</span>
         </div>
       </div>
 
@@ -88,6 +91,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </div>
               </div>
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  onClick={onExportClick}
+                  className="flex items-center justify-between w-full group"
+                >
+                  <span className="text-xs font-bold text-emerald-600 group-hover:text-emerald-700 transition-colors">📄 Export Books Data</span>
+                  <span className={`text-[12px] text-emerald-400`}>⬇️</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -116,10 +128,17 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
         <button
           onClick={onFeeCalculatorClick}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-slate-600 hover:bg-slate-50 mt-1 shadow-sm border border-slate-100"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 mt-1 shadow-sm border border-slate-100 dark:border-slate-800"
         >
           <span className="text-lg">₹</span>
           <span className="font-medium">Fee Calculator</span>
+        </button>
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 mt-1 shadow-sm border border-slate-100 dark:border-slate-800"
+        >
+          <span className="text-lg">{isDarkMode ? '☀️' : '🌙'}</span>
+          <span className="font-medium">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
       </nav>
 

@@ -35,7 +35,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             return;
         }
 
-        const endpoint = isLogin ? 'http://localhost:5000/api/users/login' : 'http://localhost:5000/api/users/signup';
+        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
         const payload = isLogin
             ? { username: trimmedUsername, password: trimmedPassword }
             : { username: trimmedUsername, password: trimmedPassword, role };
@@ -50,6 +50,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             const data = await response.json();
 
             if (response.ok) {
+                localStorage.setItem('lumina_token', data.user.token);
                 onLogin(data.user.role, data.user.username);
             } else {
                 setError(data.message || "An error occurred during authentication.");

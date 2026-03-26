@@ -65,13 +65,13 @@ const mockExtractBookInfo = async (prompt: string): Promise<any> => {
 };
 
 export const extractBookInfo = async (prompt: string, imageData?: string): Promise<Partial<Book>> => {
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const isDemoMode = !apiKey || apiKey.includes('PASTE_YOUR_API_KEY');
 
   let data: any;
 
   if (isDemoMode) {
-    console.warn("Lumina: Using Demo Mode (Mock AI). Please set VITE_GOOGLE_API_KEY for real AI search.");
+    console.warn("Lumina: Using Demo Mode (Mock AI). Please set VITE_GEMINI_API_KEY for real AI search.");
     data = await mockExtractBookInfo(prompt || (imageData ? "Image Content" : "Book Search"));
   } else {
     try {
@@ -127,4 +127,38 @@ export const extractBookInfo = async (prompt: string, imageData?: string): Promi
     renewalCount: 0,
     coverUrl: `https://picsum.photos/seed/${encodeURIComponent(data.title)}/300/450`
   };
+};
+
+export const generateChatResponse = async (userMessage: string, contextBooks: Book[]): Promise<string> => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const isDemoMode = !apiKey || apiKey.includes('PASTE_YOUR_API_KEY');
+
+  if (isDemoMode) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return "I'm currently in Demo Mode. To enable my full AI capabilities, please provide a Gemini API key. However, I can tell you that we have " + contextBooks.length + " books in our library!";
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const inventoryContext = contextBooks.map(b => `${b.title} by ${b.author} (${b.category}) - ${b.status}`).join('\n');
+    
+    const prompt = `
+      You are Lumina, a helpful and friendly library assistant. 
+      The current library inventory is:
+      ${inventoryContext}
+      
+      User Question: ${userMessage}
+      
+      Respond helpfully. If they ask for recommendations, suggest books from the inventory. Keep your response concise (max 3-4 sentences).
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("Chat AI Error:", error);
+    return "I'm sorry, I encountered an error while processing your request. Please try again later.";
+  }
 };

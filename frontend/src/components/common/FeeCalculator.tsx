@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { calculateStructuredFee, FEE_CONFIG, formatCurrency } from '../utils/feeConfig';
+import { calculateStructuredFee, formatCurrency, FEE_CONFIG } from '../../utils/feeConfig';
 
 interface FeeCalculatorProps {
     onClose: () => void;

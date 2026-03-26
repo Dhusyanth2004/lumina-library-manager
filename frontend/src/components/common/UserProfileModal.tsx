@@ -1,5 +1,6 @@
 import React from 'react';
-import { Book, BookStatus } from '../types';
+import { Book, BookStatus } from '../../types';
+import { formatCurrency, calculateStructuredFee } from '../../utils/feeConfig';
 
 interface UserProfileModalProps {
     userName: string;
@@ -32,10 +33,15 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userName, allUsers,
         const now = new Date().getTime();
         const diff = Math.max(0, now - due);
         const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-        return days * 1; // $1 per day
+        return calculateStructuredFee(days);
     };
 
-    const totalFines = activeLoans.reduce((sum, b) => sum + calculateFines(b), 0);
+    const totalFines = activeLoans.reduce((sum, b) => {
+        const due = new Date(b.dueDate).getTime();
+        const now = new Date().getTime();
+        const days = Math.floor(Math.max(0, now - due) / (24 * 60 * 60 * 1000));
+        return sum + calculateStructuredFee(days);
+    }, 0);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -85,7 +91,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userName, allUsers,
                         </div>
                         <div className="bg-rose-50 p-4 rounded-2xl">
                             <p className="text-rose-600 text-xs font-bold uppercase tracking-wider mb-1">Pending Fines</p>
-                            <p className="text-2xl font-bold text-rose-900">${totalFines.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-rose-900">{formatCurrency(totalFines)}</p>
                         </div>
                     </div>
 
@@ -101,7 +107,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userName, allUsers,
                                     </div>
                                     {book.status === BookStatus.OVERDUE && (
                                         <span className="bg-rose-100 text-rose-600 text-[10px] font-bold px-2 py-1 rounded-md">
-                                            Fine: ${calculateFines(book).toFixed(2)}
+                                            Fine: {formatCurrency(calculateFines(book))}
                                         </span>
                                     )}
                                 </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Book } from '../../types';
 
 interface SearchFiltersProps {
     searchTerm: string;
