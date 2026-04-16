@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          target: 'https://lumina-library-manager-1.onrender.com',
           changeOrigin: true,
           secure: false,
         }
