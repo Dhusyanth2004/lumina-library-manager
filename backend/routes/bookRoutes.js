@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const bookController = require('../controllers/bookController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
@@ -26,12 +26,13 @@ router.post(
 // Update a book (with validation)
 router.put(
   '/:id',
+  authorize(['ADMIN']),
   [
     body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
     body('author').optional().trim().notEmpty().withMessage('Author cannot be empty'),
     body('category').optional().trim().notEmpty().withMessage('Category cannot be empty'),
     body('borrowerEmail').optional().isEmail().withMessage('Invalid email format'),
-    body('externalLink').optional().isURL().withMessage('Invalid URL format'),
+    body('externalLink').optional({ checkFalsy: true }).isURL().withMessage('Invalid URL format'),
   ],
   bookController.updateBook
 );

@@ -98,7 +98,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onSave, onBulkSave
       coverUrl: manualCoverUrl || `https://picsum.photos/seed/${encodeURIComponent(manualTitle)}/300/450`,
       borrower: hasBorrower ? manualBorrower.trim() : undefined,
       borrowerEmail: hasBorrower ? manualEmail.trim() : undefined,
-      externalLink: manualLink.trim() || undefined
+      externalLink: manualLink.trim()
     };
 
     onSave(newBook);

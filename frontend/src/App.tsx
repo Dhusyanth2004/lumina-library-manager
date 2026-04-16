@@ -614,6 +614,7 @@ const App: React.FC = () => {
           onRejectReservation={handleRejectReservation}
           onIssueBook={handleIssueBook}
           onUpdateCover={handleUpdateBookCover}
+          onEdit={handleEditBook}
           currentRole={currentRole}
           currentUsername={username}
         />

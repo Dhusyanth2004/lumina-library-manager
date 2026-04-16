@@ -57,6 +57,10 @@ exports.updateBookById = async (id, bookData) => {
         unsetFields.dueDate = 1;
         delete update.dueDate;
     }
+    if ((update.externalLink === null || update.externalLink === "") && 'externalLink' in bookData) {
+        unsetFields.externalLink = 1;
+        delete update.externalLink;
+    }
 
     const query = { ...update };
     if (Object.keys(unsetFields).length > 0) {

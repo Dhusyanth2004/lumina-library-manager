@@ -14,11 +14,12 @@ interface BookDetailsModalProps {
     onIssueBook: (id: string) => void;
     onBorrowRequest: (id: string) => void;
     onUpdateCover: (id: string, coverUrl: string) => void;
+    onEdit?: (book: Book) => void;
     currentRole: UserRole;
     currentUsername: string;
 }
 
-const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRenew, onReturn, onReserve, onBorrowRequest, onApproveReservation, onRejectReservation, onIssueBook, onUpdateCover, currentRole, currentUsername }) => {
+const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRenew, onReturn, onReserve, onBorrowRequest, onApproveReservation, onRejectReservation, onIssueBook, onUpdateCover, onEdit, currentRole, currentUsername }) => {
     const isOverdue = book.status === BookStatus.OVERDUE;
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,7 +93,15 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRe
 
                 {/* Right Side: Details */}
                 <div className="md:w-1/2 p-8 overflow-y-auto custom-scrollbar flex flex-col">
-                    <div className="hidden md:flex justify-end mb-4">
+                    <div className="hidden md:flex justify-end mb-4 gap-2">
+                        {currentRole === UserRole.ADMIN && onEdit && (
+                            <button
+                                onClick={() => { onClose(); onEdit(book); }}
+                                className="px-4 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-100 transition-all font-bold text-sm shadow-sm"
+                            >
+                                ✎ Edit Book
+                            </button>
+                        )}
                         <button
                             onClick={onClose}
                             className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
@@ -358,6 +367,8 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({ book, onClose, onRe
                             </div>
                         )}
                     </div>
+                    {/* Spacer to guarantee scroll reach */}
+                    <div className="h-8 w-full flex-shrink-0"></div>
                 </div>
             </div>
         </div>
