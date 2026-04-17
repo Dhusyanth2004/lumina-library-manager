@@ -35,7 +35,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             return;
         }
 
-        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://lumina-library-manager-1.onrender.com';
+        const endpoint = isLogin ? `${baseUrl}/api/auth/login` : `${baseUrl}/api/auth/signup`;
         const payload = isLogin
             ? { username: trimmedUsername, password: trimmedPassword }
             : { username: trimmedUsername, password: trimmedPassword, role };
