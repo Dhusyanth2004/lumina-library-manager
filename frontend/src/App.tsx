@@ -166,13 +166,9 @@ const App: React.FC = () => {
     try {
       const response = await api.get('/books', { params: { limit: 1000 } });
       const data = response.data;
-      if (data && Array.isArray(data.books)) {
-        setBooks(data.books);
-        setTotalBooks(data.total);
-      } else if (Array.isArray(data)) {
-        setBooks(data);
-        setTotalBooks(data.length);
-      }
+      // Directly map the books array as requested
+      setBooks(response.data.books || []);
+      setTotalBooks(response.data.total || 0);
     } catch (error: any) {
       console.error('Failed to fetch books:', error);
       if (error.response?.status === 401 || error.response?.status === 403) {
