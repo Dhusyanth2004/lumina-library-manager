@@ -1,8 +1,11 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
 
+const rawUrl = import.meta.env.VITE_API_URL || 'https://lumina-library-manager-1.onrender.com/api';
+const finalUrl = rawUrl.endsWith('/api') ? rawUrl : `${rawUrl}/api`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://lumina-library-manager-1.onrender.com/api',
+  baseURL: finalUrl,
   headers: {
     'Content-Type': 'application/json',
   },
