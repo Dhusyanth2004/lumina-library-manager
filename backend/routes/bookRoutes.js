@@ -30,8 +30,8 @@ router.put(
     body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
     body('author').optional().trim().notEmpty().withMessage('Author cannot be empty'),
     body('category').optional().trim().notEmpty().withMessage('Category cannot be empty'),
-    body('borrowerEmail').optional().isEmail().withMessage('Invalid email format'),
-    body('externalLink').optional({ checkFalsy: true }).isURL().withMessage('Invalid URL format'),
+    body('borrowerEmail').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Invalid email format'),
+    body('externalLink').optional({ nullable: true, checkFalsy: true }).isURL().withMessage('Invalid URL format'),
   ],
   bookController.updateBook
 );
