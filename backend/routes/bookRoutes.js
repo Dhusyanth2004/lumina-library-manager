@@ -26,7 +26,6 @@ router.post(
 // Update a book (with validation)
 router.put(
   '/:id',
-  authorize(['ADMIN']),
   [
     body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
     body('author').optional().trim().notEmpty().withMessage('Author cannot be empty'),
