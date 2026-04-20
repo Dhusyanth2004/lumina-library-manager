@@ -33,6 +33,9 @@ exports.loginUser = async (credentials) => {
     const { username, password } = credentials;
 
     const user = await User.findOne({ username });
+    if (!user) {
+        throw new Error('Invalid credentials');
+    }
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
         throw new Error('Invalid credentials');
